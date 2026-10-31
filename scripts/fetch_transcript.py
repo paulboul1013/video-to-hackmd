@@ -32,6 +32,9 @@ BLOCK_SECONDS = 30
 CJK_PREFIXES = ("zh", "ja", "ko")
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "video-to-hackmd")
 YOUTUBE_ID = re.compile(r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|youtu\.be/)([A-Za-z0-9_-]{11})")
+X_STATUS_ID = re.compile(r"(?:^|[/.])(?:x|twitter)\.com/[^/?#]+/status/(\d+)", re.I)
+# X lists its own speech recognition as ordinary "subtitles"; its VTT cues carry per-word timing tags.
+MACHINE_CAPTION_MARKERS = ("<X-word-ms",)
 INFO_KEYS = ("id", "title", "uploader", "duration", "chapters", "language", "webpage_url", "extractor_key")
 # Caption formats this script can parse, best first (json3 has exact word timing on YouTube).
 SUB_FORMATS = "json3/vtt/srt"
@@ -77,13 +80,24 @@ def explain_failure(result):
 
 
 def cache_key(url):
-    """YouTube URLs share one key per video id; other sites use a hash of the URL."""
+    """YouTube URLs share one key per video id, and so do X posts (x.com, twitter.com, ?s=20 ...);
+    other sites use a hash of the URL without its #fragment."""
     m = YOUTUBE_ID.search(url)
     if m:
         return m.group(1)
     if re.fullmatch(r"[A-Za-z0-9_-]{11}", url):
         return url
-    return "url-" + hashlib.sha1(url.strip().encode("utf-8")).hexdigest()[:12]
+    m = X_STATUS_ID.search(url)
+    if m:
+        return "x-" + m.group(1)
+    return "url-" + hashlib.sha1(url.strip().split("#")[0].encode("utf-8")).hexdigest()[:12]
+
+
+def is_machine_caption(path):
+    """True when a 'manual' track is really the site's speech recognition (X does this)."""
+    with open(path, encoding="utf-8-sig", errors="replace") as f:
+        head = f.read(4096)
+    return any(marker in head for marker in MACHINE_CAPTION_MARKERS)
 
 
 def load_info(base, url, vdir, refresh):
@@ -349,6 +363,10 @@ def main():
         raw = parse_json3(path) if path.endswith(".json3") else parse_vtt_srt(path)
         events = clean_events(raw)
         caption_type = "manual" if kind == "manual" else "auto-generated"
+        if kind == "manual" and is_machine_caption(path):
+            caption_type = "auto-generated"
+            extra["caption_note"] = ("listed by the site as subtitles, but the file has per-word timing "
+                                     "tags of the site's own speech recognition: treat as auto-generated")
         language, track = language_code(key), key
     events = clean_events(events) if args.whisper else events
     if not events:

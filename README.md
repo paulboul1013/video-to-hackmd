@@ -7,7 +7,7 @@
 ## 功能
 
 - **抓逐字稿**：優先用平台字幕（人工 → 自動 → 人工翻譯，不用機器翻譯）；沒有字幕時可用本機 Whisper 轉錄，並用影片標題、說明欄裡的名詞當提示，讓專有名詞拼對。
-- **專有名詞校正**：例如自動字幕的「Quad Code」→「Claude Code」，只在有佐證時替換，不確定就標 `(?)`，所有更動都列在文末「附錄：字幕校正」。
+- **專有名詞校正**：例如自動字幕的「Quad Code」→「Claude Code」，只在有佐證時替換，不確定就標 `(?)`，所有更動都列在文末「附錄：字幕校正」。`scan_terms.py` 會列出每個名詞各種拼法出現的次數與時間，作為校正依據。
 - **三種輸出格式**，內容完全相同、只差版面：
   - `hackmd`（預設）：完整文章，含 TL;DR、`[TOC]`、提示框、範例與類比
   - `markdown`：同一篇文章的通用 Markdown 版（GitHub、Obsidian）
@@ -15,7 +15,8 @@
 - **時間戳可點**：YouTube、Vimeo、Bilibili 會連到影片對應秒數。
 - **自動驗證**：腳本檢查每個重點都有出現、時間對得上逐字稿、HackMD 語法沒有踩雷。
 - **學習頁面（YouTube）**：產生本機 HTML，左邊嵌入播放器、右邊是筆記，點時間戳直接跳到那一刻。
-- **快取**：同一支影片重做不用重新下載。
+- **快取**：同一支影片重做不用重新下載（X 貼文不論 x.com、twitter.com 或帶 `?s=20` 都共用同一份）。
+- **辨識機器字幕**：X 把自家語音辨識字幕列成一般字幕，腳本會偵測並改標為 auto-generated。
 
 ## 安裝
 
@@ -63,6 +64,7 @@ references/
   hackmd-syntax.md          HackMD 語法備忘
 scripts/
   fetch_transcript.py       抓字幕或 Whisper 轉錄，含快取
+  scan_terms.py             列出名詞各種拼法的次數與時間（字幕校正用）
   expand_links.py           {{m:ss}} → 時間戳連結
   check_coverage.py         檢查每個重點都有出現、時間一致
   check_hackmd.py           檢查 HackMD／Markdown 語法

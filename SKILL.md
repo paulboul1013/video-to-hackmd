@@ -51,7 +51,7 @@ Run (do not read) the script. `--out-dir` is a scratch folder for the transcript
 python -I scripts/fetch_transcript.py "<url>" --out-dir <scratch-dir>
 ```
 
-Paths are relative to this skill's folder. Any URL that `yt-dlp` supports works, including Shorts and short-video sites. Requires Python 3 and `yt-dlp` (recent YouTube also needs a JS runtime such as Node). It prints JSON with `transcript_path`, `video_id` (the cache key), `platform`, `url`, `title`, `channel`, `description`, `caption_type`, `language` (a code such as `en` or `zh-Hant`; report this one), `track`, `chars`, `chapters`, `cached`. Read the file at `transcript_path`.
+Paths are relative to this skill's folder. Any URL that `yt-dlp` supports works, including Shorts and short-video sites. Requires Python 3 and `yt-dlp` (recent YouTube also needs a JS runtime such as Node). It prints JSON with `transcript_path`, `video_id` (the cache key), `platform`, `url`, `title`, `channel`, `description`, `caption_type`, `language` (a code such as `en` or `zh-Hant`; report this one), `track`, `chars`, `chapters`, `cached`, and `caption_note` when the script reclassified the track (X lists its own speech recognition as subtitles; the script reports those as `auto-generated`). Read the file at `transcript_path`.
 
 Metadata, captions and Whisper results are cached per video in `~/.cache/video-to-hackmd/<video_id>/`, so rendering the same video again needs no download. Add `--refresh` only when the user asks to re-fetch or says the captions changed.
 
@@ -86,10 +86,15 @@ Note `caption_type` (manual or auto-generated) and `language`. The script prefer
 - Auto-generated captions and Whisper transcripts have homophone errors; step 3 still applies. A Whisper hint reduces but does not remove them.
 - Short videos (under about 3 minutes) often have no chapters and few key points. Keep the article short: skip concept blocks that the video does not explain.
 - If `language` differs from the language spoken in the video, the track is a human translation: say so in the source note and treat terms as the translator's wording.
+- On X, TikTok and Instagram, `channel` is whoever posted the clip, and `title` is often the post text (truncated, maybe in another language than the speech). Reposted talks are common: identify the speaker from the transcript (how the host addresses them, what they say about themselves) and write in the source note who posted it, who speaks, and what is 未提及 (original event, host).
 
 ### 3. Correct proper nouns (visibly)
 
-1. List suspicious terms (product names, people, commands) as `heard → likely`.
+1. List suspicious terms (product names, people, commands) as `heard → likely`. Then run the scanner with one regex group per term, listing the spellings to compare; it prints how often each spelling occurs and the transcript line start of each, which is the evidence and the times the appendix needs:
+
+   ```bash
+   python -I scripts/scan_terms.py <transcript_path> "Grokbot|GraphBot|Rockbot" "PStack|P-Stack|PSAC"
+   ```
 2. Replace a term only when the context confirms it. Evidence that counts: the video title, the uploader's chapter titles or description, the speaker's stated role, or the same mishearing repeating consistently in a clear context. Example: "Quad Code" in a talk by an Anthropic engineer about a CLI coding agent, in a video titled "ClaudeCode" → "Claude Code".
 3. If the context does not confirm, keep the original and mark it `(?)`.
 4. Record every replacement and every `(?)` with its timestamp and evidence for the appendix `附錄：字幕校正`. Ignore pure style changes (capitalization) and artifacts like `{slash}` → `/`, which need no entry. If there is nothing to record, the appendix is the single line `本範圍內沒有替換或存疑的詞。`
@@ -105,6 +110,7 @@ Save `<scratch-dir>/<video_id>.keypoints.md`. One line per key point, grouped un
 ```
 
 - Chapters exist: one pass per chapter. No chapters and `chars` > 50000: split into chunks of about 40000 characters overlapping by 2000, extract from each, then merge and remove duplicates. Otherwise: a single pass.
+- No chapters: group key points under topic headings you write, each starting with the time of its first key point and ending with `（整理者分段）`, and say in the source note that the sections are yours.
 - The time is the start of the transcript line the claim comes from, written as a `{{m:ss}}` token.
 - Use only what the transcript says. Do not add outside knowledge. If unclear, mark `(?)`. For missing facts (owner, deadline, number) write 未提及.
 - Keep the speaker's concrete examples and numbers rather than paraphrasing them away.
@@ -134,7 +140,7 @@ python -I scripts/check_coverage.py <scratch-dir>/<video_id>.keypoints.md <outpu
 python -I scripts/check_hackmd.py <output-path>          # add --plain for markdown and outline
 ```
 
-- `expand_links.py` turns tokens into time links on YouTube, Vimeo and Bilibili, and into plain `[m:ss]` on sites without time links. Exit 1 lists times that are not transcript line starts: fix them in the sheet and draft.
+- `expand_links.py` turns tokens into time links on YouTube, Vimeo and Bilibili, and into plain `[m:ss]` on sites without time links (then add one line to the source note telling readers to seek to the time by hand). Exit 1 lists times that are not transcript line starts: fix them in the sheet and draft.
 - `check_coverage.py` exit 1 lists key points that are missing or carry a different time: fix the draft.
 - `check_hackmd.py`: fix every `ERROR`; consider each `WARN`.
 
