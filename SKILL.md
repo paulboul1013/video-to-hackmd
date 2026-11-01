@@ -1,6 +1,6 @@
 ---
 name: video-to-hackmd
-description: Turns a video or talk (YouTube, Shorts, Vimeo, Bilibili, TikTok, Instagram, X and other sites) into timestamped key points rendered as a HackMD-ready technical article (default) that explains abstract concepts with small concrete examples, or as portable Markdown or a chapter outline when the user asks. Uses the site's captions, or local Whisper transcription with name hints when there are none. For YouTube it can also build a local HTML study page where clicking a timestamp jumps an embedded player to that moment, and opens it in the browser automatically. Use when the user shares a video URL or transcript and asks to summarize it, extract key points, organize notes, or write a HackMD article (整理影片重點、影片筆記、短影音重點、HackMD 技術文章、章節大綱、影片＋筆記學習頁面、點時間跳轉).
+description: Turns a video or talk (YouTube, Shorts, Vimeo, Bilibili, TikTok, Instagram, X and other sites) into timestamped key points rendered as a HackMD-ready technical article (default) that explains abstract concepts with small concrete examples, or as portable Markdown or a chapter outline when the user asks. Uses the site's captions, or local Whisper transcription with name hints when there are none. For YouTube it can also build a local HTML study page where clicking a timestamp jumps an embedded player to that moment, and opens it in the browser automatically, with captions on by default. When asked for full text or translation it adds a segment-by-segment study table (key phrase, translation, explanation) instead of reproducing the transcript. Use when the user shares a video URL or transcript and asks to summarize it, extract key points, organize notes, or write a HackMD article (整理影片重點、影片筆記、短影音重點、HackMD 技術文章、章節大綱、影片＋筆記學習頁面、點時間跳轉、逐段精讀、原文與翻譯).
 ---
 
 # Video to HackMD
@@ -51,7 +51,7 @@ Run (do not read) the script. `--out-dir` is a scratch folder for the transcript
 python -I scripts/fetch_transcript.py "<url>" --out-dir <scratch-dir>
 ```
 
-Paths are relative to this skill's folder. Any URL that `yt-dlp` supports works, including Shorts and short-video sites. Requires Python 3 and `yt-dlp` (recent YouTube also needs a JS runtime such as Node). It prints JSON with `transcript_path`, `video_id` (the cache key), `platform`, `url`, `title`, `channel`, `description`, `caption_type`, `language` (a code such as `en` or `zh-Hant`; report this one), `track`, `chars`, `chapters`, `cached`, and `caption_note` when the script reclassified the track (X lists its own speech recognition as subtitles; the script reports those as `auto-generated`). Read the file at `transcript_path`.
+Paths are relative to this skill's folder. Any URL that `yt-dlp` supports works, including Shorts and short-video sites. Requires Python 3 and `yt-dlp` (recent YouTube also needs a JS runtime such as Node). It prints JSON with `transcript_path`, `video_id` (the cache key), `platform`, `url`, `title`, `channel`, `description`, `caption_type`, `language` (a code such as `en` or `zh-Hant`; report this one), `track`, `chars`, `chapters`, `cached`, `words_path` (per-word times, YouTube captions only; see step 4), and `caption_note` when the script reclassified the track (X lists its own speech recognition as subtitles; the script reports those as `auto-generated`). Read the file at `transcript_path`.
 
 Metadata, captions and Whisper results are cached per video in `~/.cache/video-to-hackmd/<video_id>/`, so rendering the same video again needs no download. Add `--refresh` only when the user asks to re-fetch or says the captions changed.
 
@@ -112,6 +112,13 @@ Save `<scratch-dir>/<video_id>.keypoints.md`. One line per key point, grouped un
 - Chapters exist: one pass per chapter. No chapters and `chars` > 50000: split into chunks of about 40000 characters overlapping by 2000, extract from each, then merge and remove duplicates. Otherwise: a single pass.
 - No chapters: group key points under topic headings you write, each starting with the time of its first key point and ending with `（整理者分段）`, and say in the source note that the sections are yours.
 - The time is the start of the transcript line the claim comes from, written as a `{{m:ss}}` token.
+- Transcript lines group about 30 seconds, so a word, phrase or quote can be spoken well after its line start. For key points tied to one word or phrase (vocabulary, grammar examples, quotes), use the exact moment instead. When the fetch output has `words_path` (YouTube captions), run the script with every term (alternatives with `|`; `--after m:ss` skips earlier mentions, such as a vocabulary list at the end):
+
+  ```bash
+  python -I scripts/find_times.py <words_path> "思い出" "all over the world" --after 9:40
+  ```
+
+  It prints each occurrence as `m:ss`; use that as the token. `expand_links.py` accepts these times because the words file sits next to the transcript. Without `words_path` (Whisper, other sites), use line starts.
 - Use only what the transcript says. Do not add outside knowledge. If unclear, mark `(?)`. For missing facts (owner, deadline, number) write 未提及.
 - Keep the speaker's concrete examples and numbers rather than paraphrasing them away.
 - Add the appendix entries from step 3 at the end of the sheet.
@@ -127,6 +134,16 @@ For `hackmd` and `markdown`, read `references/article-template.md` (structure an
 - Label each example: `影片中的案例` plus its timestamp token if the speaker gave it, otherwise `範例（示意）`. Label your own analogies `類比（整理者）`. Never present your own example as the speaker's.
 - No YAML front matter. The title is the first `# ` heading.
 - Mark commands or settings that depend on a product version as 示意 and point to the product's official docs. If you cannot verify a docs URL, say it is unverified instead of guessing one.
+
+#### Full text or translation requests (逐段精讀)
+
+When the user asks for the full original text, a full translation, or a sentence-by-sentence version (全文、原文、逐字稿、翻譯), do not reproduce the transcript or translate it in full: the transcript is the creator's work, and some creators sell it. Instead, in `hackmd` and `markdown`, add a section `## 逐段精讀（整理者解說）` after the summary:
+
+- One table row per transcript line start: `| {{m:ss}} | 關鍵短句 | 中譯 | 這段在說什麼 |`.
+- 關鍵短句 is one short phrase from that line (about 15 characters or fewer, labelled as 影片原句片段), never whole sentences strung together.
+- 這段在說什麼 is your own fuller explanation of the segment, clearly shorter than the original.
+- Open it with an `:::info` note that this is not a transcript, and point to the study page's captions (on by default) and any official transcript the description mentions.
+- These rows are not key points: they carry no `<!-- KPnn -->` marker. Tell the user in the reply why the full text is not included.
 
 For `outline`, follow `references/formats.md`.
 
@@ -169,7 +186,7 @@ python -I -B scripts/render_player.py --serve <absolute-path-to>/<slug>-player.h
 - Keep the server running while the user studies. Stop the background command when the user says they are done, or before starting another study page.
 - In the reply, also give the `--serve` command so the user can reopen the page later.
 
-The page loads the YouTube player and marked, DOMPurify and (when needed) mermaid from the internet, so it needs a connection. Exit code 3 means the video is not on YouTube: deliver the Markdown output only.
+The player turns captions on by default, in the transcript's language when its header names one, so the full original text shows while the video plays. The page loads the YouTube player and marked, DOMPurify and (when needed) mermaid from the internet, so it needs a connection. Exit code 3 means the video is not on YouTube: deliver the Markdown output only.
 
 To render the same video in another format later: run step 1 again with the same scratch folder (cached, no download) to get `transcript_path`, reuse the existing key-point sheet and its scope, then continue from step 5. Say in the source note that the scope follows the earlier sheet.
 

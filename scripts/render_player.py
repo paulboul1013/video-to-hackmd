@@ -85,6 +85,7 @@ code { font-family:ui-monospace, Consolas, monospace; font-size:.92em; }
 __MERMAID__
 <script>
 const VIDEO_ID = __VIDEO_ID__;
+const CAPTION_LANG = __CAPTION_LANG__;
 const MARKDOWN = __MARKDOWN__;
 const notes = document.getElementById("notes");
 notes.innerHTML = DOMPurify.sanitize(marked.parse(MARKDOWN));
@@ -144,7 +145,10 @@ if (location.protocol === "file:") {
 }
 window.onYouTubeIframeAPIReady = () => {
   if (location.protocol === "file:") return;
-  player = new YT.Player("yt", { videoId: VIDEO_ID, playerVars: { rel: 0, playsinline: 1 } });
+  // Captions on by default in the spoken language, so the full original text is visible while listening.
+  const vars = { rel: 0, playsinline: 1, cc_load_policy: 1 };
+  if (CAPTION_LANG) vars.cc_lang_pref = CAPTION_LANG;
+  player = new YT.Player("yt", { videoId: VIDEO_ID, playerVars: vars });
 };
 const api = document.createElement("script");
 api.src = "https://www.youtube.com/iframe_api";
@@ -217,12 +221,15 @@ def main():
     if not vid:
         print("The study page needs a YouTube video; this transcript's URL is not one.", file=sys.stderr)
         sys.exit(3)
+    # Header line "Captions: auto-generated (ja-orig)" -> "ja"; Whisper transcripts may lack it.
+    lang = re.search(r"Captions: [^(\n]*\(([A-Za-z]{2,3}(?:-Hant|-Hans)?)", transcript)
     title = re.search(r"^# (.+)$", article, re.M)
     title = (title.group(1) if title else "Study page").replace("<", "&lt;").replace(">", "&gt;")
     mermaid = ('<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>'
                if "```mermaid" in article else "")
     html = (PAGE.replace("__TITLE__", title).replace("__MERMAID__", mermaid)
             .replace("__VIDEO_ID__", js_string(vid.group(1)))
+            .replace("__CAPTION_LANG__", js_string(lang.group(1)) if lang else '""')
             .replace("__MARKDOWN__", js_string(to_portable(article))))
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)

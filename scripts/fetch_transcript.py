@@ -172,6 +172,17 @@ def parse_json3(path):
             yield ev.get("tStartMs", 0) / 1000.0, "".join(s.get("utf8", "") for s in segs)
 
 
+def parse_json3_words(path):
+    """Per-word start times from YouTube json3 (each seg carries tOffsetMs within its event)."""
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    for ev in data.get("events", []):
+        for s in ev.get("segs") or []:
+            text = s.get("utf8", "").replace("\n", " ").strip()
+            if text:
+                yield (ev.get("tStartMs", 0) + s.get("tOffsetMs", 0)) / 1000.0, text
+
+
 CUE_TIME = re.compile(r"(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{3})\s*-->")
 
 
@@ -387,6 +398,13 @@ def main():
     out_path = os.path.join(args.out_dir, f"{cache_key(args.url)}.transcript.txt")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(text)
+    # Word-level times (YouTube json3 only) let find_times.py and expand_links.py use exact moments.
+    words_path = None
+    if not args.whisper and path.endswith(".json3"):
+        words_path = os.path.join(args.out_dir, f"{cache_key(args.url)}.words.tsv")
+        with open(words_path, "w", encoding="utf-8") as f:
+            f.writelines(f"{t:.2f}\t{w}\n" for t, w in parse_json3_words(path))
+        extra["words_path"] = os.path.abspath(words_path)
 
     print(json.dumps({
         "transcript_path": os.path.abspath(out_path), "video_id": cache_key(args.url),
